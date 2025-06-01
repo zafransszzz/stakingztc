@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>ZenChain ZTC Staking</title>
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -27,30 +27,30 @@
     <!-- Bond -->
     <div class="mb-4">
       <p class="font-semibold mb-1">1. Bond</p>
-      <input type="text" id="bondAmount" placeholder="Jumlah ZTC" class="border px-2 py-1 rounded w-full mb-2">
+      <input type="text" id="bondAmount" placeholder="Jumlah ZTC" class="border px-2 py-1 rounded w-full mb-2" />
       <button onclick="bond()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Bond</button>
     </div>
 
     <!-- Bond Extra -->
     <div class="mb-4">
       <p class="font-semibold mb-1">2. Tambah Stake</p>
-      <input type="text" id="extraAmount" placeholder="Jumlah tambahan ZTC" class="border px-2 py-1 rounded w-full mb-2">
+      <input type="text" id="extraAmount" placeholder="Jumlah tambahan ZTC" class="border px-2 py-1 rounded w-full mb-2" />
       <button onclick="bondExtra()" class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600">Bond Extra</button>
     </div>
 
     <!-- Nominate -->
     <div class="mb-4">
       <p class="font-semibold mb-1">3. Nominasi Validator</p>
-      <input type="text" id="nominator" placeholder="Alamat Validator, pisahkan dengan koma" class="border px-2 py-1 rounded w-full mb-2">
+      <input type="text" id="nominator" placeholder="Alamat Validator, pisahkan dengan koma" class="border px-2 py-1 rounded w-full mb-2" />
       <button onclick="nominate()" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">Nominate</button>
     </div>
 
     <!-- Payout -->
     <div class="mb-4">
       <p class="font-semibold mb-1">4. Klaim Reward</p>
-      <input type="text" id="validatorAddress" placeholder="Alamat Validator" class="border px-2 py-1 rounded w-full mb-2">
-      <input type="number" id="era" placeholder="Era" class="border px-2 py-1 rounded w-full mb-2">
-      <input type="number" id="page" placeholder="Page" class="border px-2 py-1 rounded w-full mb-2">
+      <input type="text" id="validatorAddress" placeholder="Alamat Validator" class="border px-2 py-1 rounded w-full mb-2" />
+      <input type="number" id="era" placeholder="Era" class="border px-2 py-1 rounded w-full mb-2" />
+      <input type="number" id="page" placeholder="Page" class="border px-2 py-1 rounded w-full mb-2" />
       <button onclick="payout()" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">Claim Reward</button>
     </div>
   </div>
@@ -108,7 +108,10 @@
       const contract = new ethers.Contract(STAKING_CONTRACT, STAKING_ABI, provider);
       try {
         const result = await contract.ledger(address);
-        const staked = ethers.utils.formatUnits(result.bonded || 0, 18);
+        // result adalah objek yang mengandung bonded dalam uint256, di ethers.js bisa langsung
+        // asumsi result.bonded karena struktur yang didokumentasikan
+        const bonded = result.bonded ? result.bonded : result; // fallback
+        const staked = ethers.utils.formatUnits(bonded, 18);
         document.getElementById("stakedAmount").textContent = `${staked} ZTC`;
       } catch (e) {
         document.getElementById("stakedAmount").textContent = "0 ZTC";
@@ -117,36 +120,80 @@
 
     async function bond() {
       const val = document.getElementById("bondAmount").value;
+      if (!val || isNaN(val)) {
+        alert("Masukkan jumlah ZTC yang valid!");
+        return;
+      }
       const amount = ethers.utils.parseUnits(val, 18);
       const contract = await getContract();
-      await contract.bondWithRewardDestination(amount, 0);
-      alert("Bond sukses!");
+      try {
+        const tx = await contract.bondWithRewardDestination(amount, 0);
+        await tx.wait();
+        alert("Bond sukses!");
+      } catch (error) {
+        alert("Gagal Bond: " + error.message);
+      }
     }
 
     async function bondExtra() {
       const val = document.getElementById("extraAmount").value;
+      if (!val || isNaN(val)) {
+        alert("Masukkan jumlah tambahan ZTC yang valid!");
+        return;
+      }
       const amount = ethers.utils.parseUnits(val, 18);
       const contract = await getContract();
-      await contract.bondExtra(amount);
-      alert("Bond Extra sukses!");
+      try {
+        const tx = await contract.bondExtra(amount);
+        await tx.wait();
+        alert("Bond Extra sukses!");
+      } catch (error) {
+        alert("Gagal Bond Extra: " + error.message);
+      }
     }
 
     async function nominate() {
       const input = document.getElementById("nominator").value;
+      if (!input) {
+        alert("Masukkan alamat validator!");
+        return;
+      }
       const addresses = input.split(",").map(addr => addr.trim());
       const contract = await getContract();
-      await contract.nominate(addresses);
-      alert("Nominasi sukses!");
+      try {
+        const tx = await contract.nominate(addresses);
+        await tx.wait();
+        alert("Nominasi sukses!");
+      } catch (error) {
+        alert("Gagal Nominasi: " + error.message);
+      }
     }
 
     async function payout() {
       const validator = document.getElementById("validatorAddress").value;
       const era = document.getElementById("era").value;
       const page = document.getElementById("page").value;
+
+      if (!validator || !era || !page) {
+        alert("Masukkan data validator, era, dan page dengan benar!");
+        return;
+      }
       const contract = await getContract();
-      await contract.payoutStakersByPage(validator, era, page);
-      alert("Reward diklaim!");
+      try {
+        const tx = await contract.payoutStakersByPage(validator, era, page);
+        await tx.wait();
+        alert("Reward diklaim!");
+      } catch (error) {
+        alert("Gagal klaim reward: " + error.message);
+      }
     }
+
+    // attach fungsi ke window supaya bisa dipanggil dari onclick HTML
+    window.connectWallet = connectWallet;
+    window.bond = bond;
+    window.bondExtra = bondExtra;
+    window.nominate = nominate;
+    window.payout = payout;
   </script>
 </body>
 </html>

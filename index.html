@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ZenChain ZTC Staking</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.min.js"></script>
+</head>
+<body>
+  <h2>ZenChain ZTC Staking</h2>
+
+  <p><b>1. Bond & Restake</b></p>
+  <input type="text" id="bondAmount" placeholder="Jumlah ZTC">
+  <button onclick="bond()">Bond & Restake</button>
+
+  <p><b>2. Tambah Stake</b></p>
+  <input type="text" id="extraAmount" placeholder="Jumlah tambahan ZTC">
+  <button onclick="bondExtra()">Bond Extra</button>
+
+  <p><b>3. Nominasi Validator</b></p>
+  <input type="text" id="nominator" placeholder="Alamat Validator (pisah dengan koma)">
+  <button onclick="nominate()">Nominate</button>
+
+  <p><b>4. Klaim Reward</b></p>
+  <input type="text" id="validatorAddress" placeholder="Alamat Validator">
+  <input type="number" id="era" placeholder="Era">
+  <input type="number" id="page" placeholder="Page">
+  <button onclick="payout()">Payout Reward</button>
+
+  <script>
+    const CONTRACT_ADDRESS = "0x0000000000000000000000000000000000000800";
+    const ABI = [
+      "function bondWithRewardDestination(uint256 value, uint8 destination)",
+      "function bondExtra(uint256 value)",
+      "function nominate(address[] targets)",
+      "function payoutStakersByPage(address validator, uint256 era, uint256 page)"
+    ];
+
+    async function getContract() {
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      await provider.send("eth_requestAccounts", []);
+      const signer = provider.getSigner();
+      return new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+    }
+
+    async function bond() {
+      const val = document.getElementById("bondAmount").value;
+      const amount = ethers.utils.parseUnits(val, 18);
+      const contract = await getContract();
+      await contract.bondWithRewardDestination(amount, 0); // 0 = restake
+      alert("Bond sukses!");
+    }
+
+    async function bondExtra() {
+      const val = document.getElementById("extraAmount").value;
+      const amount = ethers.utils.parseUnits(val, 18);
+      const contract = await getContract();
+      await contract.bondExtra(amount);
+      alert("Bond extra sukses!");
+    }
+
+    async function nominate() {
+      const input = document.getElementById("nominator").value;
+      const addresses = input.split(",").map(addr => addr.trim());
+      const contract = await getContract();
+      await contract.nominate(addresses);
+      alert("Nominasi sukses!");
+    }
+
+    async function payout() {
+      const validator = document.getElementById("validatorAddress").value;
+      const era = document.getElementById("era").value;
+      const page = document.getElementById("page").value;
+      const contract = await getContract();
+      await contract.payoutStakersByPage(validator, era, page);
+      alert("Reward diklaim!");
+    }
+  </script>
+</body>
+</html>

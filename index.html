@@ -7,6 +7,11 @@
 <body>
   <h2>ZenChain ZTC Staking</h2>
 
+  <button id="connectButton" onclick="connectWallet()">🔌 Connect Wallet</button>
+  <p id="walletAddress">Belum terhubung</p>
+
+  <hr>
+
   <p><b>1. Bond & Restake</b></p>
   <input type="text" id="bondAmount" placeholder="Jumlah ZTC">
   <button onclick="bond()">Bond & Restake</button>
@@ -26,6 +31,7 @@
   <button onclick="payout()">Payout Reward</button>
 
   <script>
+    let signer;
     const CONTRACT_ADDRESS = "0x0000000000000000000000000000000000000800";
     const ABI = [
       "function bondWithRewardDestination(uint256 value, uint8 destination)",
@@ -34,10 +40,24 @@
       "function payoutStakersByPage(address validator, uint256 era, uint256 page)"
     ];
 
-    async function getContract() {
+    async function connectWallet() {
+      if (typeof window.ethereum === "undefined") {
+        alert("MetaMask tidak ditemukan!");
+        return;
+      }
+
       const provider = new ethers.providers.Web3Provider(window.ethereum);
       await provider.send("eth_requestAccounts", []);
-      const signer = provider.getSigner();
+      signer = provider.getSigner();
+      const address = await signer.getAddress();
+      document.getElementById("walletAddress").textContent = `Terhubung: ${address}`;
+    }
+
+    async function getContract() {
+      if (!signer) {
+        alert("Silakan connect wallet terlebih dahulu!");
+        throw new Error("Wallet belum terkoneksi");
+      }
       return new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
     }
 
@@ -45,7 +65,7 @@
       const val = document.getElementById("bondAmount").value;
       const amount = ethers.utils.parseUnits(val, 18);
       const contract = await getContract();
-      await contract.bondWithRewardDestination(amount, 0); // 0 = restake
+      await contract.bondWithRewardDestination(amount, 0);
       alert("Bond sukses!");
     }
 

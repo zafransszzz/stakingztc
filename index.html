@@ -1,47 +1,75 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
+  <meta charset="UTF-8">
   <title>ZenChain ZTC Staking</title>
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <h2>ZenChain ZTC Staking</h2>
+<body class="bg-gray-100 font-sans">
 
-  <button id="connectButton" onclick="connectWallet()">🔌 Connect Wallet</button>
-  <p id="walletAddress">Belum terhubung</p>
+  <div class="max-w-xl mx-auto p-6 bg-white shadow-xl rounded-2xl mt-10">
+    <h2 class="text-2xl font-bold mb-4 text-center">🔥 ZenChain ZTC Staking</h2>
 
-  <hr>
+    <div class="mb-4">
+      <button id="connectButton" onclick="connectWallet()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+        🔌 Connect Wallet
+      </button>
+      <p id="walletInfo" class="mt-2 text-sm text-gray-700">Belum terhubung</p>
+    </div>
 
-  <p><b>1. Bond & Restake</b></p>
-  <input type="text" id="bondAmount" placeholder="Jumlah ZTC">
-  <button onclick="bond()">Bond & Restake</button>
+    <div class="mb-4">
+      <p class="font-medium">ZTC yang distake: <span id="stakedAmount">-</span></p>
+    </div>
 
-  <p><b>2. Tambah Stake</b></p>
-  <input type="text" id="extraAmount" placeholder="Jumlah tambahan ZTC">
-  <button onclick="bondExtra()">Bond Extra</button>
+    <hr class="my-4">
 
-  <p><b>3. Nominasi Validator</b></p>
-  <input type="text" id="nominator" placeholder="Alamat Validator (pisah dengan koma)">
-  <button onclick="nominate()">Nominate</button>
+    <!-- Bond -->
+    <div class="mb-4">
+      <p class="font-semibold mb-1">1. Bond</p>
+      <input type="text" id="bondAmount" placeholder="Jumlah ZTC" class="border px-2 py-1 rounded w-full mb-2">
+      <button onclick="bond()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Bond</button>
+    </div>
 
-  <p><b>4. Klaim Reward</b></p>
-  <input type="text" id="validatorAddress" placeholder="Alamat Validator">
-  <input type="number" id="era" placeholder="Era">
-  <input type="number" id="page" placeholder="Page">
-  <button onclick="payout()">Payout Reward</button>
+    <!-- Bond Extra -->
+    <div class="mb-4">
+      <p class="font-semibold mb-1">2. Tambah Stake</p>
+      <input type="text" id="extraAmount" placeholder="Jumlah tambahan ZTC" class="border px-2 py-1 rounded w-full mb-2">
+      <button onclick="bondExtra()" class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600">Bond Extra</button>
+    </div>
+
+    <!-- Nominate -->
+    <div class="mb-4">
+      <p class="font-semibold mb-1">3. Nominasi Validator</p>
+      <input type="text" id="nominator" placeholder="Alamat Validator, pisahkan dengan koma" class="border px-2 py-1 rounded w-full mb-2">
+      <button onclick="nominate()" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">Nominate</button>
+    </div>
+
+    <!-- Payout -->
+    <div class="mb-4">
+      <p class="font-semibold mb-1">4. Klaim Reward</p>
+      <input type="text" id="validatorAddress" placeholder="Alamat Validator" class="border px-2 py-1 rounded w-full mb-2">
+      <input type="number" id="era" placeholder="Era" class="border px-2 py-1 rounded w-full mb-2">
+      <input type="number" id="page" placeholder="Page" class="border px-2 py-1 rounded w-full mb-2">
+      <button onclick="payout()" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">Claim Reward</button>
+    </div>
+  </div>
 
   <script>
     let signer;
-    const CONTRACT_ADDRESS = "0x0000000000000000000000000000000000000800";
-    const ABI = [
+    const STAKING_CONTRACT = "0x0000000000000000000000000000000000000800";
+    const STAKING_ABI = [
       "function bondWithRewardDestination(uint256 value, uint8 destination)",
       "function bondExtra(uint256 value)",
       "function nominate(address[] targets)",
-      "function payoutStakersByPage(address validator, uint256 era, uint256 page)"
+      "function payoutStakersByPage(address validator, uint256 era, uint256 page)",
+      "function ledger(address) view returns (uint256 bonded)"
     ];
 
+    const ZENCHAIN_CHAIN_ID = "0x20d8"; // 8408
+
     async function connectWallet() {
-      if (typeof window.ethereum === "undefined") {
+      if (!window.ethereum) {
         alert("MetaMask tidak ditemukan!");
         return;
       }
@@ -50,15 +78,41 @@
       await provider.send("eth_requestAccounts", []);
       signer = provider.getSigner();
       const address = await signer.getAddress();
-      document.getElementById("walletAddress").textContent = `Terhubung: ${address}`;
+      const network = await provider.getNetwork();
+
+      if (network.chainId !== 8408) {
+        try {
+          await window.ethereum.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: ZENCHAIN_CHAIN_ID }],
+          });
+        } catch (switchError) {
+          alert("Gagal switch ke jaringan ZenChain Testnet!");
+          return;
+        }
+      }
+
+      document.getElementById("walletInfo").textContent = `Terhubung: ${address}`;
+      loadStakedAmount(address, provider);
     }
 
     async function getContract() {
       if (!signer) {
-        alert("Silakan connect wallet terlebih dahulu!");
-        throw new Error("Wallet belum terkoneksi");
+        alert("Silakan connect wallet terlebih dahulu.");
+        throw new Error("Wallet belum terhubung");
       }
-      return new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+      return new ethers.Contract(STAKING_CONTRACT, STAKING_ABI, signer);
+    }
+
+    async function loadStakedAmount(address, provider) {
+      const contract = new ethers.Contract(STAKING_CONTRACT, STAKING_ABI, provider);
+      try {
+        const result = await contract.ledger(address);
+        const staked = ethers.utils.formatUnits(result.bonded || 0, 18);
+        document.getElementById("stakedAmount").textContent = `${staked} ZTC`;
+      } catch (e) {
+        document.getElementById("stakedAmount").textContent = "0 ZTC";
+      }
     }
 
     async function bond() {
@@ -74,7 +128,7 @@
       const amount = ethers.utils.parseUnits(val, 18);
       const contract = await getContract();
       await contract.bondExtra(amount);
-      alert("Bond extra sukses!");
+      alert("Bond Extra sukses!");
     }
 
     async function nominate() {
